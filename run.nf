@@ -67,14 +67,14 @@ process MergeRelatedBCFs {
 }
 
 process BatchBCFs {
-    tag "${batch_id}"
-    publishDir "${params.output_dir}/batched_bcfs/${batch_id}", mode: "link"
+    tag "${chr}"
+    publishDir "${params.output_dir}/batched_bcfs/", mode: "link"
 
     input:
-    tuple val(batch_id), path(bcfs), path(bcf_csis)
+    tuple val(chr), path(bcfs), path(bcf_csis)
 
     output:
-    tuple val(batch_id), path("batch_${batch_id}.bcf"), path("batch_${batch_id}.bcf.csi")
+    tuple val(chr), path("chr${chr}.bcf"), path("chr${chr}.bcf.csi")
 
     script:
     """
@@ -84,8 +84,8 @@ process BatchBCFs {
         bcftools merge -Ob -o merged.bcf $bcfs
         bcftools index merged.bcf
 
-        bcftools +fill-tags merged.bcf -Oz -o batch_${batch_id}.bcf -- -t AC,AN,AF
-        bcftools index batch_${batch_id}.bcf
+        bcftools +fill-tags merged.bcf -Oz -o chr${chr}.bcf -- -t AC,AN,AF
+        bcftools index chr${chr}.bcf
 
         # Cleanup
         rm merged.bcf
@@ -93,34 +93,34 @@ process BatchBCFs {
 }
 
 process SelectRegionFromBCF {
-    tag "${batch_id}"
-    publishDir "${params.output_dir}/batched_bcfs_chr/${batch_id}/${chr}", mode: "link"
+    tag "${trio_id}"
+    publishDir "${params.output_dir}/batched_bcfs_chr/${trio_id}/${chr}", mode: "link"
 
     input:
-    tuple val(batch_id), val(chr), path(bcf), path(bcf_csi)
+    tuple val(trio_id), val(chr), path(bcf), path(bcf_csi)
 
     output:
-    tuple val(batch_id), val(chr), path("batch_${batch_id}.${chr}.bcf"), path("batch_${batch_id}.${chr}.bcf.csi")
+    tuple val(trio_id), val(chr), path("${trio_id}.chr${chr}.bcf"), path("${trio_id}.chr${chr}.bcf.csi")
 
     script:
     """
         export TMPDIR=/ifs/temp/
         module load bioinf/bcftools
 
-        bcftools view -r ${chr} -Ob -o batch_${batch_id}.${chr}.bcf $bcf
-        bcftools index batch_${batch_id}.${chr}.bcf
+        bcftools view -r ${chr} -Ob -o ${trio_id}.chr${chr}.bcf $bcf
+        bcftools index ${trio_id}.chr${chr}.bcf
     """
 }
 
 process PhaseBCF {
-    tag "${batch_id}.${chr}"
-    publishDir "${params.output_dir}/phased_bcfs/${batch_id}/${chr}", mode: "link"
+    tag "${chr}"
+    publishDir "${params.output_dir}/phased_bcfs", mode: "link"
 
     input:
-    tuple val(batch_id), val(chr), path(bcf), path(bcf_csi)
+    tuple val(chr), path(bcf), path(bcf_csi)
 
     output:
-    tuple val(batch_id), val(chr), path("batch_${batch_id}_phased.${chr}.bcf"), path("batch_${batch_id}_phased.${chr}.bcf.csi")
+    tuple val(chr), path("chr${chr}.bcf"), path("chr${chr}.bcf.csi")
 
     script:
     def ref = interpolateReferenceFile(params.interpolated_refs.1000genomes_genotype, chr)
@@ -129,20 +129,20 @@ process PhaseBCF {
         export TMPDIR=/ifs/temp/
         module load bioinf/bcftools
 
-        ${params.bins.shapeit5} --input ${bcf} --pedigree ${params.ref.ped} --region ${chr} --map ${map} --output batch_${batch_id}_phased.${chr}.bcf --reference ${ref} --thread ${task.cpus}
-        bcftools index batch_${batch_id}_phased.${chr}.bcf
+        ${params.bins.shapeit5} --input ${bcf} --pedigree ${params.ref.ped} --region ${chr} --map ${map} --output chr${chr}.bcf --reference ${ref} --thread ${task.cpus}
+        bcftools index chr${chr}.bcf
     """
 }
 
 process ImputeBCF {
-    tag "${batch_id}.${chr}"
-    publishDir "${params.output_dir}/imputed_bcfs/${batch_id}/${chr}", mode: "link"
+    tag "${chr}"
+    publishDir "${params.output_dir}/imputed_bcfs", mode: "link"
 
     input:
-    tuple val(batch_id), val(chr), path(bcf), path(bcf_csi)
+    tuple val(chr), path(bcf), path(bcf_csi)
 
     output:
-    tuple val(batch_id), val(chr), path("batch_${batch_id}.${chr}.vcf.gz"), path("batch_${batch_id}.${chr}.vcf.gz.csi")
+    tuple val(chr), path("chr${chr}.vcf.gz"), path("chr${chr}.vcf.gz.csi")
 
     script:
     def ref = interpolateReferenceFile(params.interpolated_refs.1000genomes_genotype, chr)
@@ -152,20 +152,20 @@ process ImputeBCF {
         export TMPDIR=/ifs/temp/
         module load bioinf/bcftools
 
-        ${params.bins.impute5} --h ${ref} --g ${bcf} --m ${map} --r ${region} --buffer-region ${region} --out-ap-field --o batch_${batch_id}.${chr}.vcf.gz --threads ${task.cpus}
-        bcftools index 
+        ${params.bins.impute5} --h ${ref} --g ${bcf} --m ${map} --r ${region} --buffer-region ${region} --out-ap-field --o chr${chr}.vcf.gz --threads ${task.cpus}
+        bcftools index chr${chr}.vcf.gz
     """
 }
 
 process FetchInfoScoreDistribution {
     tag "${chr}"
-    publishDir "${params.output_dir}/imputation_scores/", mode: "link"
+    publishDir "${params.output_dir}/imputation_scores", mode: "link"
 
     input:
-    tuple val(batch_id), val(chr), path(bcf), path(bcf_csi)
+    tuple val(chr), path(bcf), path(bcf_csi)
 
     output:
-    tuple val(batch_id), val(chr), path("chr${chr}.tsv")
+    tuple val(chr), path("chr${chr}.tsv")
 
     script:
     """
@@ -184,7 +184,7 @@ process CalculateOffTargetCoverage {
     tuple val(trio_id), val(relationship), path(cram), path(cram_crai)
 
     output:
-    tuple val(trio_id), val(relationship), path("")
+    tuple val(trio_id), val(relationship), path("${trio_id}.${relationship}.tsv")
 
     script:
     """
@@ -192,7 +192,7 @@ process CalculateOffTargetCoverage {
         module load bioinf/mosdepth
 
         mosdepth --thresholds 1 "${trio_id}_${relationship}" "${cram}"
-        zcat "${trio_id}_${relationship}.thresholds.bed.gz" | awk 'NR>1 {covered+=$5; total+=($3-$2)} END {print covered/total}'
+        zcat "${trio_id}_${relationship}.thresholds.bed.gz" | awk 'NR>1 {covered+=$5; total+=($3-$2)} END {print covered"\\t"total"\\t"covered/total"\n"}' > ${trio_id}.${relationship}.tsv
     """
 }
 
@@ -236,7 +236,7 @@ workflow {
     trio_bcfs.combine(chromosomes).map { (trio_id, bcf, bcf_csi, chr) -> tuple(trio_id, chr, bcf, bcf_csi) }.set { trio_chr_bcfs }
     trio_chr_bcfs.groupTuple(by: 1).map { (chr, trio_id, bcfs, bcf_csis) -> tuple(chr, bcfs, bcf_csis) }.set { chr_bcfs }
 
-    chr_bcfs | PhaseBCF | ImputeBCF | FetchInfoScoreDistribution | set { scores }
+    chr_bcfs | BatchBCFs | PhaseBCF | ImputeBCF | FetchInfoScoreDistribution | set { scores }
 
 }
 
